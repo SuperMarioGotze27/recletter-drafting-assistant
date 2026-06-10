@@ -141,7 +141,21 @@ def get_openai_client():
         api_key = st.session_state.get("openai_api_key", "")
     if not api_key:
         return None
-    return OpenAI(api_key=api_key)
+    # Support custom base_url (e.g., SiliconFlow, Azure, etc.)
+    base_url = os.getenv("OPENAI_BASE_URL", None)
+    kwargs = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    # DEBUG: show what we're using (mask the key)
+    masked_key = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else "***"
+    st.sidebar.caption(f"Debug: base_url={base_url}, key={masked_key}")
+    return OpenAI(**kwargs)
+
+
+def get_llm_model_name() -> str:
+    """Return the LLM model name. Defaults to gpt-4o-mini, but can be overridden
+    via OPENAI_MODEL env var for providers like SiliconFlow (DeepSeek)."""
+    return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
 def build_llm_prompt(profile: dict, analysis: dict) -> str:
@@ -193,9 +207,12 @@ def generate_letter_with_llm(profile: dict, analysis: dict) -> str:
     client = get_openai_client()
     if client is None:
         return ""
+    model_name = get_llm_model_name()
+    # DEBUG
+    st.sidebar.caption(f"Debug: using model={model_name}")
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model_name,
             messages=[
                 {"role": "system", "content": "You are an expert academic recommendation letter writer."},
                 {"role": "user", "content": build_llm_prompt(profile, analysis)},
@@ -205,7 +222,7 @@ def generate_letter_with_llm(profile: dict, analysis: dict) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        st.error(f"LLM generation failed: {e}")
+        st.error(f"LLM generation failed ({model_name}): {e}")
         return ""
 
 
