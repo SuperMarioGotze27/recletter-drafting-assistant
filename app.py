@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 from transformers import pipeline
 from openai import OpenAI
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter as LETTER_SIZE
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_JUSTIFY
@@ -296,7 +296,7 @@ def draft_letter_template(profile: dict, analysis: dict) -> str:
 # =============================================================================
 def generate_pdf(letter_text: str, student_name: str) -> bytes:
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    doc = SimpleDocTemplate(buffer, pagesize=LETTER_SIZE)
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY, fontSize=11, leading=16, spaceAfter=12))
     story = []
