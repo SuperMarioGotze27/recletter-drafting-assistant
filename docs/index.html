@@ -45,7 +45,40 @@
             font-weight: 500;
         }
         
-        /* CTA Buttons */
+        /* Giant CTA Button */
+        .main-cta {
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        .btn-giant {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 20px 48px;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.3rem;
+            text-decoration: none;
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #1e293b;
+            box-shadow: 0 10px 30px rgba(251, 191, 36, 0.3);
+            transition: all 0.2s;
+            animation: pulse 2s infinite;
+        }
+        .btn-giant:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(251, 191, 36, 0.4);
+        }
+        .btn-giant .btn-sub {
+            font-size: 0.85rem;
+            font-weight: 500;
+            opacity: 0.8;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 10px 30px rgba(251, 191, 36, 0.3); }
+            50% { box-shadow: 0 10px 40px rgba(251, 191, 36, 0.5); }
+        }
         .cta-group {
             display: flex;
             gap: 16px;
@@ -216,9 +249,18 @@
             <span class="badge">⚡ LLM-Powered</span>
             <span class="badge">🎓 Education Tech</span>
         </div>
+        
+        <!-- Main CTA: Streamlit Demo -->
+        <div class="main-cta">
+            <a href="https://recletter-drafting-assistant-4fh5aqrlvddloyjgfxgcnv.streamlit.app/" class="btn btn-giant" target="_blank">
+                🚀 Try the Live Demo
+                <span class="btn-sub">Interactive Streamlit App →</span>
+            </a>
+        </div>
+        
         <div class="cta-group">
-            <a href="https://recletter-drafting-assistant-4fh5aqrlvddloyjgfxgcnv.streamlit.app/" class="btn btn-primary" target="_blank">🚀 Live Demo</a>
             <a href="https://github.com/SuperMarioGotze27/recletter-drafting-assistant" class="btn btn-secondary" target="_blank">📁 GitHub Repo</a>
+            <a href="https://huggingface.co/SuperMarioGotze27/recletter-strength-bert-tiny" class="btn btn-secondary" target="_blank">🤗 HF Model</a>
         </div>
     </div>
 </section>
