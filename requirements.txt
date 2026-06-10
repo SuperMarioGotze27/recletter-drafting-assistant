@@ -1,0 +1,11 @@
+streamlit>=1.30.0
+transformers<5.0.0
+torch
+pandas
+safetensors
+pypdf
+openai>=1.0.0
+reportlab
+python-docx
+gradio
+requests
