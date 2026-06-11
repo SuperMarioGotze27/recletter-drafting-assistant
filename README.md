@@ -20,6 +20,19 @@ The app generates an editable recommendation letter draft for faculty review. It
 - Main file path: `app.py`
 - Required files: `requirements.txt`, `sample_student_profiles.csv`, and the local `recletter_strength_model/` folder
 
+Configure LLM access in Streamlit Community Cloud under **App settings > Secrets**:
+
+```toml
+OPENAI_API_KEY = "your-rotated-api-key"
+OPENAI_BASE_URL = "https://api.siliconflow.cn/v1"
+OPENAI_MODEL = "deepseek-ai/DeepSeek-V3.2"
+```
+
+`deepseek-ai/DeepSeek-V3.2` is the model family currently listed in
+SiliconFlow's chat-completions documentation. If a deployment still uses
+`deepseek-ai/DeepSeek-V3`, use the app's connection test to check whether that
+legacy identifier remains enabled for the account. Never commit API keys.
+
 ## Local Run
 
 ```bash

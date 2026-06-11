@@ -135,27 +135,94 @@ def analyze_profile(profile: dict) -> dict:
 # =============================================================================
 # LLM-powered letter generation
 # =============================================================================
+def get_secret(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value is None:
+        try:
+            value = st.secrets.get(name, default)
+        except FileNotFoundError:
+            value = default
+    return str(value or default).strip()
+
+
+def get_llm_base_url() -> str:
+    return get_secret("OPENAI_BASE_URL").rstrip("/")
+
+
+def get_llm_model_name() -> str:
+    configured_model = get_secret("OPENAI_MODEL")
+    if configured_model:
+        return configured_model
+    if "siliconflow" in get_llm_base_url().lower():
+        return "deepseek-ai/DeepSeek-V3.2"
+    return "gpt-4o-mini"
+
+
+def get_llm_configuration_error() -> str:
+    if not get_secret("OPENAI_API_KEY"):
+        return "OPENAI_API_KEY is missing."
+    base_url = get_llm_base_url()
+    if base_url and not base_url.startswith(("https://", "http://")):
+        return "OPENAI_BASE_URL must start with http:// or https://."
+    if not get_llm_model_name():
+        return "OPENAI_MODEL is missing."
+    return ""
+
+
+def get_llm_configuration_warning() -> str:
+    if (
+        "siliconflow" in get_llm_base_url().lower()
+        and get_llm_model_name() == "deepseek-ai/DeepSeek-V3"
+    ):
+        return (
+            "SiliconFlow's current API documentation lists "
+            "deepseek-ai/DeepSeek-V3.2. Update OPENAI_MODEL if the legacy "
+            "DeepSeek-V3 identifier no longer resolves for your account."
+        )
+    return ""
+
+
 def get_openai_client():
-    api_key = os.getenv("OPENAI_API_KEY", "")
+    api_key = get_secret("OPENAI_API_KEY")
     if not api_key:
         return None
-    # Support custom base_url (e.g., SiliconFlow, Azure, etc.)
-    base_url = os.getenv("OPENAI_BASE_URL", None)
-    kwargs = {"api_key": api_key}
+    base_url = get_llm_base_url()
+    kwargs = {"api_key": api_key, "timeout": 90.0, "max_retries": 2}
     if base_url:
         kwargs["base_url"] = base_url
     return OpenAI(**kwargs)
 
 
 def is_llm_available() -> bool:
-    """Check if LLM is configured via environment variables (Secrets)."""
-    return bool(os.getenv("OPENAI_API_KEY", ""))
+    return not get_llm_configuration_error()
 
 
-def get_llm_model_name() -> str:
-    """Return the LLM model name. Defaults to gpt-4o-mini, but can be overridden
-    via OPENAI_MODEL env var for providers like SiliconFlow (DeepSeek)."""
-    return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+def redact_llm_error(error: Exception) -> str:
+    message = str(error)
+    api_key = get_secret("OPENAI_API_KEY")
+    if api_key:
+        message = message.replace(api_key, "***")
+    return message
+
+
+def test_llm_connection() -> tuple[bool, str]:
+    client = get_openai_client()
+    if client is None:
+        return False, get_llm_configuration_error()
+    model_name = get_llm_model_name()
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "user", "content": "Reply with OK."}],
+            temperature=0,
+            max_tokens=8,
+        )
+        content = response.choices[0].message.content if response.choices else ""
+        if not content:
+            return False, "The provider returned an empty response."
+        return True, f"Connected successfully to {model_name}."
+    except Exception as exc:
+        return False, redact_llm_error(exc)
 
 
 def build_llm_prompt(profile: dict, analysis: dict) -> str:
@@ -169,6 +236,7 @@ def build_llm_prompt(profile: dict, analysis: dict) -> str:
     percentile = profile.get("class_percentile", "")
     note = profile.get("faculty_note", "")
     project = profile.get("project_summary", "")
+    uploaded_text = truncate(profile.get("uploaded_text", ""), 3000)
     strength = analysis["strength"]
     tone = analysis["tone"]
 
@@ -182,8 +250,10 @@ STUDENT PROFILE:
 - Your relationship to student: {relationship}
 - Target program: {target}
 - Your institution: {institution}
+- Recommender/signature: {recommender}
 - Faculty observations: {note}
 - Project/work evidence: {project}
+- Uploaded transcript/profile evidence: {uploaded_text or "Not provided"}
 
 ML MODEL ANALYSIS:
 - Predicted recommendation strength: {strength}
@@ -218,9 +288,12 @@ def generate_letter_with_llm(profile: dict, analysis: dict) -> str:
             temperature=0.7,
             max_tokens=1200,
         )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        st.error(f"LLM generation failed ({model_name}): {e}")
+        content = response.choices[0].message.content if response.choices else ""
+        if not content:
+            raise ValueError("The provider returned an empty response.")
+        return content.strip()
+    except Exception as exc:
+        st.error(f"LLM generation failed ({model_name}): {redact_llm_error(exc)}")
         return ""
 
 
@@ -345,16 +418,28 @@ def profile_from_row(row: pd.Series) -> dict:
 # Sidebar
 # =============================================================================
 llm_available = is_llm_available()
+llm_configuration_error = get_llm_configuration_error()
+llm_configuration_warning = get_llm_configuration_warning()
 
 with st.sidebar:
     st.header("⚙️ Settings")
     
     if llm_available:
         use_llm = st.toggle("Use LLM for letter generation", value=True, help="Toggle between AI-generated letters and template-based drafts")
-        st.caption("✅ LLM is configured. Letters will be generated by AI.")
+        st.caption(f"✅ LLM is configured: `{get_llm_model_name()}`")
+        if llm_configuration_warning:
+            st.warning(llm_configuration_warning)
+        if st.button("Test LLM connection", use_container_width=True):
+            with st.spinner("Testing the configured LLM..."):
+                connection_ok, connection_message = test_llm_connection()
+            if connection_ok:
+                st.success(connection_message)
+            else:
+                st.error(f"LLM connection failed: {connection_message}")
+        st.caption("Student profile data is sent to the configured external LLM when enabled.")
     else:
         use_llm = st.toggle("Use LLM for letter generation", value=False, disabled=True, help="LLM not configured. Add OPENAI_API_KEY to Streamlit Secrets to enable.")
-        st.caption("⚠️ LLM not configured. Using template-based drafts. Add API key to Secrets to enable AI generation.")
+        st.caption(f"⚠️ LLM not configured: {llm_configuration_error}")
     
     st.divider()
     st.markdown("**About this project**")
@@ -439,7 +524,7 @@ if analyze_clicked:
         analysis = analyze_profile(profile)
         
         # Generate letter
-        if use_llm and get_openai_client():
+        if use_llm and llm_available:
             with st.spinner("Generating letter with LLM..."):
                 letter = generate_letter_with_llm(profile, analysis)
             if letter:
@@ -537,7 +622,7 @@ if batch_file is not None:
         for i, (_, row) in enumerate(df.iterrows()):
             batch_profile = profile_from_row(row)
             analysis = analyze_profile(batch_profile)
-            if use_llm and get_openai_client():
+            if use_llm and llm_available:
                 letter = generate_letter_with_llm(batch_profile, analysis) or draft_letter_template(batch_profile, analysis)
             else:
                 letter = draft_letter_template(batch_profile, analysis)
